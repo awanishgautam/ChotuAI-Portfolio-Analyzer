@@ -1,0 +1,21 @@
+streamlit
+plotly
+openai
+yfinance
+pandas
+numpy
+plotly
+pydantic
+pydantic_settings
+python-dotenv
+#for zerodha
+kiteconnect
+#for icici direct
+breeze-connect
+#for icici direct connection
+fastapi 
+uvicorn
+python-multipart
+#amfi tool got historical nav
+mftool
+rapidfuzz # for fuzzy matching of mutual fund names

@@ -1,0 +1,90 @@
+[project]
+name = "portfolio-ai"
+version = "0.1.0"
+description = "AI Powered Portfolio Analytics"
+requires-python = ">=3.12"
+
+dependencies = [
+    "streamlit>=1.39",
+    "kiteconnect>=5.0.1",
+    "openai>=1.98.0",
+    "python-dotenv>=1.0.1",
+    "pandas>=2.2",
+    "numpy>=2.0",
+    "plotly>=5.24",
+    "yfinance>=0.2.54",
+    "scipy>=1.14",
+    "statsmodels>=0.14",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "requests>=2.32",
+    "breeze-connect>=1.0.60",
+    "fastapi>=0.115",
+    "uvicorn>=0.34",
+    "mftool>=2.8",
+    "rapidfuzz>=3.10",
+]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "agents*",
+    "analytics*",
+    "app_config*",
+    "brokers*",
+    "components*",
+    "domain*",
+    "network*",
+    "portfolio*",
+    "providers*",
+    "repositories*",
+    "services*",
+    "utils*",
+]
+exclude = ["tests*", "logs*", ".venv*", "ui*", "engine*"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.9",
+]
+
+[tool.black]
+line-length = 88
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers --strict-config -ra"
+markers = [
+    "integration: requires network access or external credentials",
+]
+
+[tool.coverage.run]
+source = [
+    "agents",
+    "analytics",
+    "app_config",
+    "brokers",
+    "components",
+    "domain",
+    "network",
+    "portfolio",
+    "providers",
+    "repositories",
+    "services",
+    "utils",
+]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
