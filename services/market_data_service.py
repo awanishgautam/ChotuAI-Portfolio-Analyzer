@@ -17,17 +17,26 @@ from portfolio.models import MutualFundHolding
 
 class MarketDataService:
 
+    _shared_mf: Mftool | None = None
+    _shared_scheme_lookup: dict[str, str] | None = None
+
     def __init__(self):
+        self.mf = None
+        self.scheme_lookup = None
 
-        self.mf = Mftool()
-        self.scheme_lookup = self.mf.get_scheme_codes()
-
-        # build name -> code
-        self.scheme_lookup = {
-            self.normalize_name(name): code
-            for code, name in self.scheme_lookup.items()
-            if code.isdigit()      # skip the header row
-        }
+    def _ensure_mutual_funds(self) -> None:
+        """Initialize AMFI data only when a mutual fund actually needs it."""
+        if self.__class__._shared_mf is None:
+            mf = Mftool()
+            codes = mf.get_scheme_codes()
+            self.__class__._shared_mf = mf
+            self.__class__._shared_scheme_lookup = {
+                self.normalize_name(name): code
+                for code, name in codes.items()
+                if code.isdigit()
+            }
+        self.mf = self.__class__._shared_mf
+        self.scheme_lookup = self.__class__._shared_scheme_lookup
 
     # ----------------------------------------------------
     # Helper function to extract amfi code of mutual fund
@@ -59,6 +68,8 @@ class MarketDataService:
         return " ".join(name.split())
 
     def get_amfi_code(self, fund_name: str):
+
+        self._ensure_mutual_funds()
 
         fund_name = self.normalize_name(fund_name)
 
@@ -157,6 +168,7 @@ class MarketDataService:
             DatetimeIndex
         """
 
+        self._ensure_mutual_funds()
         amfi_code = holding.amfi_code
 
         if not amfi_code:

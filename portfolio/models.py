@@ -27,6 +27,7 @@ class AssetHolding(BaseModel):
 
     pnl: float = 0
     pnl_percent: float = 0
+    country: str | None = None
 
     @property
     def display_name(self) -> str:
@@ -53,9 +54,11 @@ class EquityHolding(AssetHolding):
     
 class MutualFundHolding(AssetHolding):
     fund_name: str
+    asset_type: AssetType = AssetType.MUTUAL_FUND
     folio: str
     amfi_code: str | None = None
     xirr: float | None = None
+    exchange: Exchange = Exchange.MUTUAL_FUND
     
     @property
     def display_name(self) -> str:

@@ -18,6 +18,9 @@ class PortfolioEngine:
     def build(
         self,
         asset_type: AssetType | None = None,
+        *,
+        include_positions: bool = True,
+        include_cash: bool = True,
     ) -> Portfolio:
         """
         Build a portfolio.
@@ -41,9 +44,9 @@ class PortfolioEngine:
                 if holding.asset_type == asset_type
             ]
         
-        positions = self.provider.get_positions()
+        positions = self.provider.get_positions() if include_positions else []
 
-        cash = self.provider.get_cash()
+        cash = self.provider.get_cash() if include_cash else 0.0
 
         return PortfolioBuilder().build(
             holdings=holdings,

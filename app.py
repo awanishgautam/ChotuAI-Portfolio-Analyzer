@@ -7,14 +7,7 @@ import sys
 
 from components.login import login
 from domain.enums import AssetType
-from services.benchmark_service import BenchmarkService
-from analytics.benchmark_metrics import BenchmarkMetrics
-from agents.portfolio_agent import PortfolioAgent
-from analytics.risk.risk_engine import RiskEngine
-from portfolio.history_builder import PortfolioHistoryBuilder
-from portfolio.portfolio_engine import PortfolioEngine
 from brokers import BrokerType
-from providers.broker_provider_factory import ProviderFactory
 from app_config import settings
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -77,6 +70,7 @@ if (
         "access_token",
         "portfolio",
         "metrics",
+        "analytics",
         "portfolio_prices",
         "benchmark_prices",
         "benchmark_metrics",
@@ -94,6 +88,15 @@ st.session_state.broker = broker
 login(
     st.session_state.broker,
 )
+
+# Network-heavy integrations are imported only after authentication. This
+# keeps the login screen responsive, especially for ICICI (Breeze/FastAPI) users.
+from services.benchmark_service import BenchmarkService
+from analytics.benchmark_metrics import BenchmarkMetrics
+from analytics.risk.risk_engine import RiskEngine
+from portfolio.history_builder import PortfolioHistoryBuilder
+from portfolio.portfolio_engine import PortfolioEngine
+from providers.broker_provider_factory import ProviderFactory
 
 # ----------------------------------------------------
 # Title and Sidebars
@@ -133,6 +136,9 @@ if "portfolio" not in st.session_state:
 
 if "metrics" not in st.session_state:
     st.session_state.metrics = None
+
+if "analytics" not in st.session_state:
+    st.session_state.analytics = None
 
 if "portfolio_prices" not in st.session_state:
     st.session_state.portfolio_prices = None
@@ -207,6 +213,10 @@ if needs_refresh:
 
         portfolio = portfolio_engine.build(
             asset_type=asset_type,
+            # Neither open positions nor cash is rendered or used by the
+            # current analytics. Avoid two additional broker API round trips.
+            include_positions=False,
+            include_cash=False,
         )
 
         if not portfolio.holdings:
@@ -220,6 +230,7 @@ if needs_refresh:
         benchmark_prices = None
         benchmark_metrics = None
         metrics = None
+        analytics = None
 
         try:
 
@@ -241,9 +252,12 @@ if needs_refresh:
                 portfolio_prices=portfolio_prices,
                 benchmark_prices=benchmark_prices,
                 benchmark_name=benchmark_name,
+                portfolio=portfolio,
+                asset_prices=history.components,
             )
 
-            metrics = risk_engine.metrics()
+            analytics = risk_engine.summary()
+            metrics = analytics.metrics
 
             if benchmark_prices is not None:
 
@@ -255,6 +269,7 @@ if needs_refresh:
 
         st.session_state.portfolio = portfolio
         st.session_state.metrics = metrics
+        st.session_state.analytics = analytics
         st.session_state.portfolio_prices = portfolio_prices
         st.session_state.benchmark_prices = benchmark_prices
         st.session_state.benchmark_metrics = benchmark_metrics
@@ -689,6 +704,53 @@ if (
 # ----------------------------------------------------
 # Benchmark Metrics
 # ----------------------------------------------------
+if st.session_state.analytics:
+    analytics = st.session_state.analytics
+
+    st.header("Portfolio Health & Risk")
+    h1, h2, h3, h4 = st.columns(4)
+    h1.metric("Health Score", f"{analytics.health.score}/100")
+    h2.metric("Risk Score", f"{analytics.health.risk_score}/100")
+    h3.metric("Risk Level", analytics.health.risk_level)
+    h4.metric("Diversification", f"{analytics.health.diversification_score}/100")
+    st.caption(analytics.health.recommendation)
+
+    st.header("Exposure Breakdown")
+    sector_tab, country_tab = st.tabs(["Sector", "Market / domicile country"])
+    with sector_tab:
+        if analytics.exposures.sector:
+            st.plotly_chart(px.pie(names=list(analytics.exposures.sector), values=list(analytics.exposures.sector.values()), hole=0.4), use_container_width=True)
+        else:
+            st.info("Sector metadata is unavailable for these holdings.")
+    with country_tab:
+        if analytics.exposures.country:
+            st.plotly_chart(px.pie(names=list(analytics.exposures.country), values=list(analytics.exposures.country.values()), hole=0.4), use_container_width=True)
+            st.caption("Indian mutual funds are classified by domicile. This is not a look-through view of foreign securities held inside a fund.")
+
+    st.header("Stress Tests")
+    stress = pd.DataFrame([item.model_dump() for item in analytics.stress_tests])
+    stress["Shock"] = stress.pop("shock").map(lambda value: f"{value:.1%}")
+    stress["Estimated Return"] = stress.pop("estimated_return").map(lambda value: f"{value:.1%}")
+    stress["Estimated Loss"] = stress.pop("estimated_loss").map(money)
+    stress.rename(columns={"scenario": "Scenario"}, inplace=True)
+    st.dataframe(stress, use_container_width=True, hide_index=True)
+
+    st.header("Rolling & Correlation Analysis")
+    available_windows = list(analytics.rolling.by_window)
+    if available_windows:
+        window = st.selectbox("Rolling window (trading days)", available_windows, index=min(1, len(available_windows) - 1))
+        rolling = analytics.rolling.by_window[window]
+        chart_columns = [name for name in ("return", "volatility", "correlation", "beta") if name in rolling]
+        rolling_df = pd.DataFrame({name.title(): rolling[name] for name in chart_columns}, index=pd.to_datetime(rolling["dates"]))
+        st.line_chart(rolling_df)
+    else:
+        st.info("More historical observations are needed for rolling analysis.")
+
+    if analytics.correlations.assets:
+        corr = pd.DataFrame(analytics.correlations.matrix, index=analytics.correlations.assets, columns=analytics.correlations.assets)
+        st.plotly_chart(px.imshow(corr, zmin=-1, zmax=1, color_continuous_scale="RdBu_r", text_auto=".2f"), use_container_width=True)
+        st.caption(f"Average pairwise correlation: {analytics.correlations.average_correlation:.2f}")
+
 if (
     st.session_state.benchmark_metrics
     and
@@ -801,6 +863,8 @@ if st.button("Ask"):
     else:
 
         with st.spinner("Thinking..."):
+
+            from agents.portfolio_agent import PortfolioAgent
 
             agent = PortfolioAgent(
                 settings.openai_api_key.get_secret_value()

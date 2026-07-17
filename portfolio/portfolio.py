@@ -161,6 +161,29 @@ class Portfolio:
             for h in self.holdings
         }
 
+    def allocation_by(self, dimension: str) -> dict[str, float]:
+        """Market-value allocation by sector, country, or asset type."""
+        if dimension not in {"sector", "country", "asset_type"}:
+            raise ValueError("dimension must be sector, country, or asset_type")
+        total = self.market_value
+        if total <= 0:
+            return {}
+        values: dict[str, float] = {}
+        for holding in self.holdings:
+            if dimension == "asset_type":
+                label = holding.asset_type.value
+            else:
+                label = getattr(holding, dimension, None)
+                if dimension == "country" and not label:
+                    exchange = getattr(holding, "exchange", None)
+                    exchange_value = getattr(exchange, "value", exchange)
+                    isin = getattr(holding, "isin", "") or ""
+                    is_indian_fund = holding.asset_type.value == "MUTUAL_FUND"
+                    label = "India" if exchange_value in {"NSE", "BSE", "MUTUAL_FUND"} or isin.startswith("IN") or is_indian_fund else "Unknown"
+                label = label or "Unknown"
+            values[str(label)] = values.get(str(label), 0.0) + holding.market_value
+        return {key: value / total * 100 for key, value in sorted(values.items())}
+
     # ------------------------------------------------------
     # Largest Holdings
     # ------------------------------------------------------
@@ -227,12 +250,16 @@ class Portfolio:
                 row["Exchange"] = h.exchange.value
                 row["ISIN"] = h.isin
                 row["Sector"] = h.sector
+                row["Country"] = h.country or (
+                    "India" if h.exchange.value in {"NSE", "BSE"} else "Unknown"
+                )
 
             elif isinstance(h, MutualFundHolding):
 
                 row["Folio"] = h.folio
                 row["XIRR"] = h.xirr
                 row["AMC Symbol"] = h.display_name
+                row["Country"] = h.country or "India"
 
             rows.append(row)
 

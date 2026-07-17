@@ -143,6 +143,30 @@ class RollingMetrics(BaseModel):
     rolling_alpha: list[float] = Field(default_factory=list)
 
     rolling_drawdown: list[float] = Field(default_factory=list)
+    dates: list[str] = Field(default_factory=list)
+    rolling_correlation: list[float] = Field(default_factory=list)
+    by_window: dict[str, dict[str, list[float] | list[str]]] = Field(default_factory=dict)
+
+
+class StressTestResult(BaseModel):
+    scenario: str
+    shock: float
+    estimated_return: float
+    estimated_loss: float = 0.0
+
+
+class ExposureBreakdown(BaseModel):
+    sector: dict[str, float] = Field(default_factory=dict)
+    country: dict[str, float] = Field(default_factory=dict)
+    asset_type: dict[str, float] = Field(default_factory=dict)
+
+
+class CorrelationAnalysis(BaseModel):
+    assets: list[str] = Field(default_factory=list)
+    matrix: list[list[float]] = Field(default_factory=list)
+    average_correlation: float = 0.0
+    highest_pair: list[str] = Field(default_factory=list)
+    highest_correlation: float = 0.0
 
 
 class PortfolioHealth(BaseModel):
@@ -167,6 +191,8 @@ class PortfolioHealth(BaseModel):
     volatility_score: int = Field(default=0)
 
     recommendation: str = Field(default="")
+    risk_score: int = Field(default=0)
+    return_score: int = Field(default=0)
 
 
 class AnalyticsResult(BaseModel):
@@ -181,4 +207,6 @@ class AnalyticsResult(BaseModel):
     rolling: RollingMetrics
 
     health: PortfolioHealth
-    
+    exposures: ExposureBreakdown = Field(default_factory=ExposureBreakdown)
+    stress_tests: list[StressTestResult] = Field(default_factory=list)
+    correlations: CorrelationAnalysis = Field(default_factory=CorrelationAnalysis)

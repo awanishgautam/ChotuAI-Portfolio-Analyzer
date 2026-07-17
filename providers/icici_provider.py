@@ -2,8 +2,10 @@ from pyclbr import Function
 
 from breeze_connect import BreezeConnect
 from datetime import date, datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor
 import logging
 import pprint
+import time
 
 from portfolio.models import (
     AssetHolding,
@@ -56,19 +58,26 @@ class ICICIDirectProvider(BrokerProvider):
     def get_equity_holdings(
         self,
         ) -> list[AssetHolding]:
+        started = time.perf_counter()
 
-        demat_response = self.breeze.get_demat_holdings()
-        holdings_response = self.breeze.get_portfolio_holdings(
-            exchange_code="NSE",
-            from_date=(
-                datetime.now() - timedelta(days=365)
-            ).strftime("%Y-%m-%dT00:00:00.000Z"),
-            to_date=datetime.now().strftime(
-                "%Y-%m-%dT00:00:00.000Z"
-            ),
-            stock_code="",
-            portfolio_type="",
-        )
+        def fetch_portfolio_holdings():
+            return self.breeze.get_portfolio_holdings(
+                exchange_code="NSE",
+                from_date=(datetime.now() - timedelta(days=365)).strftime(
+                    "%Y-%m-%dT00:00:00.000Z"
+                ),
+                to_date=datetime.now().strftime("%Y-%m-%dT00:00:00.000Z"),
+                stock_code="",
+                portfolio_type="",
+            )
+
+        # These endpoints are independent. Running them together makes total
+        # latency approximately the slower call instead of their sum.
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="icici-holdings") as executor:
+            demat_future = executor.submit(self.breeze.get_demat_holdings)
+            portfolio_future = executor.submit(fetch_portfolio_holdings)
+            demat_response = demat_future.result()
+            holdings_response = portfolio_future.result()
 
         demat = demat_response.get(
             "Success",
@@ -163,6 +172,11 @@ class ICICIDirectProvider(BrokerProvider):
                     pnl_percent=pnl_percent,
                 )
             )
+        logging.info(
+            "ICICI holdings fetched in %.2fs (%d holdings)",
+            time.perf_counter() - started,
+            len(holdings),
+        )
         return holdings
 
     def _is_etf(self, item):

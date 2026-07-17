@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from domain.enums import Exchange
 from portfolio.builder import PortfolioBuilder
 from portfolio.models import EquityHolding
+from portfolio.portfolio_engine import PortfolioEngine
 
 
 def holding(symbol: str, quantity: float, average: float, last: float) -> EquityHolding:
@@ -34,3 +35,23 @@ def test_builder_preserves_metadata_positions_and_cash() -> None:
 def test_holding_rejects_negative_quantity() -> None:
     with pytest.raises(ValidationError):
         holding("BAD", -1, 100, 100)
+
+
+def test_portfolio_engine_can_skip_unused_account_calls() -> None:
+    class Provider:
+        def get_holdings(self):
+            return [holding("AAA", 1, 100, 110)]
+
+        def get_positions(self):
+            raise AssertionError("positions should not be fetched")
+
+        def get_cash(self):
+            raise AssertionError("cash should not be fetched")
+
+    portfolio = PortfolioEngine(Provider()).build(
+        include_positions=False,
+        include_cash=False,
+    )
+    assert len(portfolio.holdings) == 1
+    assert portfolio.positions == []
+    assert portfolio.cash == 0

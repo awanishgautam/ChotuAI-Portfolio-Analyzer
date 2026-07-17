@@ -1,10 +1,5 @@
 from brokers.types import BrokerType
 
-from services.auth.zerodha_auth import ZerodhaAuth
-
-from services.auth.icici_auth import IciciAuth
-
-
 class AuthFactory:
 
     @staticmethod
@@ -13,10 +8,12 @@ class AuthFactory:
     ):
 
         if broker == BrokerType.ZERODHA:
+            from services.auth.zerodha_auth import ZerodhaAuth
 
             return ZerodhaAuth()
 
         if broker == BrokerType.ICICI_DIRECT:
+            from services.auth.icici_auth import IciciAuth
 
             return IciciAuth()
 
